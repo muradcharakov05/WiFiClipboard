@@ -14,8 +14,8 @@ using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
 [assembly: AssemblyTitle("Мост буфера — текст и файлы")]
-[assembly: AssemblyVersion("7.2.0.0")]
-[assembly: AssemblyFileVersion("7.2.0.0")]
+[assembly: AssemblyVersion("7.3.0.0")]
+[assembly: AssemblyFileVersion("7.3.0.0")]
 namespace WifiClipboard {
 public sealed class State {
     public readonly object Gate = new object();
@@ -227,6 +227,7 @@ public sealed partial class BridgeForm : Form {
         var footer=new Panel {Name="fixedFooter",Dock=DockStyle.Bottom,Height=70,Padding=new Padding(26,8,26,14),BackColor=BackColor};
         footer.Controls.Add(forgetDevices);Controls.Add(footer);
         AddFeatures(layout);
+        ApplyDesktopTheme(layout,footer,forgetDevices);
         KeepScrollBottomReachable(layout);
         state.WriteClipboard=Write;
         sequence=GetClipboardSequenceNumber(); timer.Interval=500; timer.Tick+=Observe; if(testRoot==null){timer.Start();WatchNetwork();}

@@ -35,7 +35,7 @@ public sealed partial class BridgeForm {
    addresses.Items.Clear();addresses.Items.AddRange(urls.Cast<object>().ToArray());addresses.SelectedIndex=selected!=null&&urls.Contains(selected)?urls.IndexOf(selected):0;
   };refresh();
   panel.Controls.Add(new Label{Text="При смене Wi-Fi адреса обновятся автоматически. Если .local\nне открывается, выберите новый IP в списке выше.",AutoSize=true});
-  using(var refreshTimer=new System.Windows.Forms.Timer{Interval=2000}){refreshTimer.Tick+=delegate{refresh();};refreshTimer.Start();dialog.ShowDialog(this);}
+  using(var refreshTimer=new System.Windows.Forms.Timer{Interval=2000}){refreshTimer.Tick+=delegate{refresh();};refreshTimer.Start();DesktopTheme.Dialog(dialog);dialog.ShowDialog(this);}
   if(picture.Image!=null)picture.Image.Dispose();
  }}
  static ListView Table(){return new ListView{Dock=DockStyle.Fill,View=View.Details,FullRowSelect=true,MultiSelect=false,HideSelection=false};}
@@ -46,13 +46,13 @@ public sealed partial class BridgeForm {
   list.SelectedIndexChanged+=delegate{if(list.SelectedItems.Count>0)name.Text=list.SelectedItems[0].Text;};
   var rename=new Button{Text="Переименовать",AutoSize=true};rename.Click+=delegate{if(list.SelectedItems.Count==0)return;try{server.RenameDevice((string)list.SelectedItems[0].Tag,name.Text);refresh();}catch(Exception e){MessageBox.Show(dialog,e.Message);}};bar.Controls.Add(rename);
   var revoke=new Button{Text="Отключить выбранное",AutoSize=true};revoke.Click+=delegate{if(list.SelectedItems.Count==0)return;try{server.RevokeDevice((string)list.SelectedItems[0].Tag);refresh();name.Clear();}catch(Exception e){MessageBox.Show(dialog,e.Message);}};bar.Controls.Add(revoke);
-  var reload=new Button{Text="Обновить",AutoSize=true};reload.Click+=delegate{refresh();};bar.Controls.Add(reload);refresh();dialog.ShowDialog(this);
+  var reload=new Button{Text="Обновить",AutoSize=true};reload.Click+=delegate{refresh();};bar.Controls.Add(reload);refresh();DesktopTheme.Dialog(dialog);dialog.ShowDialog(this);
  }}
  void ShowHistory(){using(var dialog=new Form{Text="История · последние 300 событий",ClientSize=new Size(1050,500),StartPosition=FormStartPosition.CenterParent,Font=Font}){
   var list=Table();list.Columns.Add("Время",165);list.Columns.Add("Направление",165);list.Columns.Add("Файл / событие",260);list.Columns.Add("Устройство",170);list.Columns.Add("Результат",250);dialog.Controls.Add(list);
   var bar=new FlowLayoutPanel{Dock=DockStyle.Bottom,Height=52,Padding=new Padding(8)};dialog.Controls.Add(bar);
   Action refresh=delegate{list.BeginUpdate();list.Items.Clear();foreach(var item in server.History()){var row=new ListViewItem(item.Time.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss"));row.SubItems.Add(item.Direction);row.SubItems.Add(item.Name);row.SubItems.Add(item.Device);row.SubItems.Add(item.Status);list.Items.Add(row);}list.EndUpdate();};
-  var reload=new Button{Text="Обновить",AutoSize=true};reload.Click+=delegate{refresh();};bar.Controls.Add(reload);var clear=new Button{Text="Очистить историю",AutoSize=true};clear.Click+=delegate{try{server.ClearHistory();refresh();}catch(Exception e){MessageBox.Show(dialog,e.Message);}};bar.Controls.Add(clear);refresh();dialog.ShowDialog(this);
+  var reload=new Button{Text="Обновить",AutoSize=true};reload.Click+=delegate{refresh();};bar.Controls.Add(reload);var clear=new Button{Text="Очистить историю",AutoSize=true};clear.Click+=delegate{try{server.ClearHistory();refresh();}catch(Exception e){MessageBox.Show(dialog,e.Message);}};bar.Controls.Add(clear);refresh();DesktopTheme.Dialog(dialog);dialog.ShowDialog(this);
  }}
 }
 }

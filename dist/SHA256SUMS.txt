@@ -1,1 +1,1 @@
-13cc3962441c2ceceb05e57ca147befcb254e4c8ab210b71bc7990bb678a7a81  WiFiClipboard.exe
+2ca57dcfe1eb87ebdb9e412d3e96704df11d0ce0337d3c09535aa313d49df909  WiFiClipboard.exe
