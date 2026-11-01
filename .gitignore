@@ -1,0 +1,27 @@
+# Runtime data
+Полученные файлы/
+**/Полученные файлы/
+.WiFiClipboard-archives/
+**/.WiFiClipboard-archives/
+.WiFiClipboard-resume/
+**/.WiFiClipboard-resume/
+trusted-devices.dat
+devices.json
+history.json
+local-name.txt
+*.part
+*.tmp
+*.log
+
+# Local build / editor output
+/WiFiClipboard.exe
+/bin/
+/obj/
+.vs/
+.vscode/
+*.user
+*.suo
+self-test.txt
+QR-*ПРОВЕРКА.png
+ui-*.png
+layout-*.png
