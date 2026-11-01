@@ -12,6 +12,7 @@ public sealed class LocalNameResponder : IDisposable {
     readonly string name;
     Socket socket;
     volatile bool stopped;
+    int networkDirty;int announcements;DateTime nextAnnouncement;
     public bool Active {get;private set;}
     readonly HashSet<string> joined=new HashSet<string>();
     static readonly IPAddress group=IPAddress.Parse("224.0.0.251");
@@ -34,10 +35,33 @@ public sealed class LocalNameResponder : IDisposable {
             var thread=new Thread(Run);thread.IsBackground=true;thread.Start();
         }catch(SocketException){if(socket!=null)socket.Close();Active=false;}
     }
-    void Join() {
-        foreach(var ip in Interfaces())if(!joined.Contains(ip.Address.ToString()))try {
-            socket.SetSocketOption(SocketOptionLevel.IP,SocketOptionName.AddMembership,new MulticastOption(group,ip.Address));joined.Add(ip.Address.ToString());
+    public void RefreshNetwork(){Interlocked.Exchange(ref networkDirty,1);}
+    void Join(bool force=false) {
+        var desired=new HashSet<string>(Interfaces().Select(ip=>ip.Address.ToString()));
+        bool changed=force||!desired.SetEquals(joined);
+        if(force||joined.Except(desired).Any()){
+            foreach(string old in joined)try{socket.SetSocketOption(SocketOptionLevel.IP,SocketOptionName.DropMembership,new MulticastOption(group,IPAddress.Parse(old)));}catch(SocketException){}
+            joined.Clear();
+        }
+        foreach(string ip in desired)if(!joined.Contains(ip))try{
+            socket.SetSocketOption(SocketOptionLevel.IP,SocketOptionName.AddMembership,new MulticastOption(group,IPAddress.Parse(ip)));joined.Add(ip);
         }catch(SocketException){}
+        Active=joined.Count>0;
+        if(changed&&Active){announcements=2;nextAnnouncement=DateTime.UtcNow;}
+        if(!Active)announcements=0;
+    }
+    void Announce(){
+        foreach(string ip in joined)try{
+            var address=IPAddress.Parse(ip);socket.SetSocketOption(SocketOptionLevel.IP,SocketOptionName.MulticastInterface,address.GetAddressBytes());
+            byte[] packet=Announcement(name,address);socket.SendTo(packet,new IPEndPoint(group,5353));
+        }catch(SocketException){}
+    }
+    internal static byte[] Announcement(string name,IPAddress address){
+        using(var output=new MemoryStream()){
+            PutWord(output,0);PutWord(output,0x8400);PutWord(output,0);PutWord(output,1);PutWord(output,0);PutWord(output,0);
+            PutName(output,name);PutWord(output,1);PutWord(output,0x8001);PutWord(output,0);PutWord(output,120);PutWord(output,4);
+            byte[] bytes=address.GetAddressBytes();if(bytes.Length!=4)throw new ArgumentException("IPv4 required");output.Write(bytes,0,4);return output.ToArray();
+        }
     }
     static bool SameSubnet(IPAddress a,IPAddress b,IPAddress mask) {
         byte[] x=a.GetAddressBytes(),y=b.GetAddressBytes(),m=mask.GetAddressBytes();
@@ -46,7 +70,9 @@ public sealed class LocalNameResponder : IDisposable {
     void Run() {
         var buffer=new byte[4096];DateTime refresh=DateTime.MinValue;
         while(!stopped)try {
-            if(DateTime.UtcNow>refresh){Join();refresh=DateTime.UtcNow.AddSeconds(20);Active=joined.Count>0;}
+            bool force=Interlocked.Exchange(ref networkDirty,0)!=0;
+            if(force||DateTime.UtcNow>refresh){Join(force);refresh=DateTime.UtcNow.AddSeconds(3);}
+            if(announcements>0&&DateTime.UtcNow>=nextAnnouncement){Announce();announcements--;nextAnnouncement=DateTime.UtcNow.AddSeconds(1);}
             EndPoint remote=new IPEndPoint(IPAddress.Any,0);int length=socket.ReceiveFrom(buffer,ref remote);var sender=(IPEndPoint)remote;
             var addresses=Interfaces().Where(ip=>SameSubnet(ip.Address,sender.Address,ip.Mask)).ToArray();
             if(addresses.Length==0)continue;
@@ -54,7 +80,7 @@ public sealed class LocalNameResponder : IDisposable {
             if(response==null)continue;
             socket.SetSocketOption(SocketOptionLevel.IP,SocketOptionName.MulticastInterface,addresses[0].Address.GetAddressBytes());
             socket.SendTo(response,unicast?remote:new IPEndPoint(group,5353));
-        }catch(SocketException){}catch(ObjectDisposedException){return;}catch(Exception){}
+        }catch(SocketException){}catch(ObjectDisposedException){return;}catch(NetworkInformationException){Thread.Sleep(250);}catch(Exception){}
     }
     static int Word(byte[] data,int offset){if(offset<0||offset+1>=data.Length)throw new InvalidDataException();return(data[offset]<<8)|data[offset+1];}
     static void PutWord(Stream output,int n){output.WriteByte((byte)(n>>8));output.WriteByte((byte)n);}

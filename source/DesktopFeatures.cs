@@ -8,8 +8,8 @@ using System.Windows.Forms;
 namespace WifiClipboard {
 public sealed partial class BridgeForm {
  readonly Queue<string> shareQueue=new Queue<string>();bool preparing;
- void AddFeatures(FlowLayoutPanel layout,List<string> ips){
-  var qr=new Button{Text="QR-код подключения…",Width=610,Height=42};qr.Click+=delegate{ShowQr(ips);};layout.Controls.Add(qr);layout.Controls.SetChildIndex(qr,4);
+ void AddFeatures(FlowLayoutPanel layout){
+  var qr=new Button{Text="QR-код подключения…",Width=610,Height=42};qr.Click+=delegate{ShowQr();};layout.Controls.Add(qr);layout.Controls.SetChildIndex(qr,4);
   var folder=new Button{Text="Выбрать папку → отправить ZIP…",Width=610,Height=42};folder.Click+=delegate{using(var d=new FolderBrowserDialog{Description="Выберите папку для упаковки в ZIP",ShowNewFolderButton=false})if(d.ShowDialog(this)==DialogResult.OK)SharePaths(new[]{d.SelectedPath});};layout.Controls.Add(folder);layout.Controls.SetChildIndex(folder,10);
   var drop=new Label{Text="Перетащите сюда файлы или папки из Проводника.\nПапки упакуются в ZIP автоматически.",AutoSize=false,Width=610,Height=65,BackColor=Color.FromArgb(223,240,233),TextAlign=ContentAlignment.MiddleCenter};layout.Controls.Add(drop);layout.Controls.SetChildIndex(drop,11);
   var features=new FlowLayoutPanel{Width=620,Height=48,WrapContents=false,Margin=new Padding(0,12,0,0)};
@@ -22,13 +22,21 @@ public sealed partial class BridgeForm {
  void PrepareNext(){if(preparing||shareQueue.Count==0||IsDisposed||Disposing)return;preparing=true;string next=shareQueue.Dequeue();fileStatus.Text="Подготовка: "+Path.GetFileName(next);
   Task.Factory.StartNew(delegate{string error=null;try{server.SharePath(next);}catch(Exception e){error=e.Message;}try{BeginInvoke(new Action(delegate{preparing=false;fileStatus.Text=error??("Доступно на iPhone: "+server.SharedCount+" файлов. Откройте список в Safari.");if(error!=null)MessageBox.Show(this,error,"Не удалось подготовить файл");PrepareNext();}));}catch(InvalidOperationException){}});
  }
- void ShowQr(List<string> ips){using(var dialog=new Form{Text="Подключение по QR",ClientSize=new Size(530,470),StartPosition=FormStartPosition.CenterParent,Font=Font}){
-  var panel=new FlowLayoutPanel{Dock=DockStyle.Fill,FlowDirection=FlowDirection.TopDown,WrapContents=false,Padding=new Padding(18)};dialog.Controls.Add(panel);
+ void ShowQr(){using(var dialog=new Form{Text="Подключение по QR",ClientSize=new Size(530,500),StartPosition=FormStartPosition.CenterParent,Font=Font}){
+  var panel=new FlowLayoutPanel{Dock=DockStyle.Fill,FlowDirection=FlowDirection.TopDown,WrapContents=false,Padding=new Padding(18),AutoScroll=true};dialog.Controls.Add(panel);
   panel.Controls.Add(new Label{Text="Откройте камеру iPhone и наведите на QR-код.",AutoSize=true});
-  var addresses=new ComboBox{Width=485,DropDownStyle=ComboBoxStyle.DropDownList};addresses.Items.Add("http://"+server.LocalHostName+":"+server.Port+"/");foreach(string ip in ips)addresses.Items.Add("http://"+ip+":"+server.Port+"/");panel.Controls.Add(addresses);
+  var addresses=new ComboBox{Width=485,DropDownStyle=ComboBoxStyle.DropDownList};panel.Controls.Add(addresses);
   var picture=new PictureBox{Width=287,Height=287,SizeMode=PictureBoxSizeMode.Normal,Margin=new Padding(96,12,0,12)};panel.Controls.Add(picture);
-  addresses.SelectedIndexChanged+=delegate{var old=picture.Image;picture.Image=ConnectionQr.Draw(addresses.SelectedItem+"#code="+server.Code);if(old!=null)old.Dispose();};addresses.SelectedIndex=0;
-  panel.Controls.Add(new Label{Text="Код заполнится автоматически. Укажите название и нажмите\n«Подключить iPhone». Если адрес не открывается, выберите IP выше.",AutoSize=true});dialog.ShowDialog(this);if(picture.Image!=null)picture.Image.Dispose();
+  addresses.SelectedIndexChanged+=delegate{if(addresses.SelectedItem==null)return;var old=picture.Image;picture.Image=ConnectionQr.Draw(addresses.SelectedItem+"#code="+server.Code);if(old!=null)old.Dispose();};
+  Action refresh=delegate{
+   RefreshNetwork(false);string selected=addresses.SelectedItem as string;
+   var urls=ConnectionUrls().ToList();
+   if(addresses.Items.Cast<string>().SequenceEqual(urls))return;
+   addresses.Items.Clear();addresses.Items.AddRange(urls.Cast<object>().ToArray());addresses.SelectedIndex=selected!=null&&urls.Contains(selected)?urls.IndexOf(selected):0;
+  };refresh();
+  panel.Controls.Add(new Label{Text="При смене Wi-Fi адреса обновятся автоматически. Если .local\nне открывается, выберите новый IP в списке выше.",AutoSize=true});
+  using(var refreshTimer=new System.Windows.Forms.Timer{Interval=2000}){refreshTimer.Tick+=delegate{refresh();};refreshTimer.Start();dialog.ShowDialog(this);}
+  if(picture.Image!=null)picture.Image.Dispose();
  }}
  static ListView Table(){return new ListView{Dock=DockStyle.Fill,View=View.Details,FullRowSelect=true,MultiSelect=false,HideSelection=false};}
  void ShowDevices(){using(var dialog=new Form{Text="Сохранённые устройства",ClientSize=new Size(740,440),StartPosition=FormStartPosition.CenterParent,Font=Font}){

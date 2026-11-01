@@ -17,7 +17,7 @@ static class FileTests {
         public Dictionary<string,object> Json {get {return new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(Encoding.UTF8.GetString(Body));}}
     }
     static void Check(bool condition,string name) {SelfTest.Check(condition,name);}
-    static Response Read(NetworkStream stream,bool head) {
+    internal static Response Read(NetworkStream stream,bool head) {
         var bytes=new List<byte>();
         while(true) {int c=stream.ReadByte();if(c<0)throw new EndOfStreamException();bytes.Add((byte)c);int n=bytes.Count;if(n>32768)throw new Exception("Headers too large");if(n>=4&&bytes[n-4]==13&&bytes[n-3]==10&&bytes[n-2]==13&&bytes[n-1]==10)break;}
         string headers=Encoding.ASCII.GetString(bytes.ToArray());int size=0;

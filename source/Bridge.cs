@@ -14,8 +14,8 @@ using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
 [assembly: AssemblyTitle("Мост буфера — текст и файлы")]
-[assembly: AssemblyVersion("7.1.0.0")]
-[assembly: AssemblyFileVersion("7.1.0.0")]
+[assembly: AssemblyVersion("7.2.0.0")]
+[assembly: AssemblyFileVersion("7.2.0.0")]
 namespace WifiClipboard {
 public sealed class State {
     public readonly object Gate = new object();
@@ -49,9 +49,7 @@ public sealed partial class Server : IDisposable {
         LoadUploads();
         state = s; listener = new TcpListener(IPAddress.Any, port); listener.Start(24);
         Port = ((IPEndPoint)listener.LocalEndpoint).Port;
-        foreach (string ip in addresses) hosts.Add(ip + ":" + Port);
-        hosts.Add(LocalHostName+":"+Port);
-        hosts.Add("127.0.0.1:" + Port); hosts.Add("localhost:" + Port);
+        UpdateNetworkAddresses(addresses);
         byte[] bytes = new byte[4]; using (var rng = RandomNumberGenerator.Create()) rng.GetBytes(bytes);
         Code = (BitConverter.ToUInt32(bytes, 0) % 100000000).ToString("D8");
         html = Resource("phone.html"); js = Resource("app.js");
@@ -104,7 +102,7 @@ public sealed partial class Server : IDisposable {
                 if (colon <= 0 || h.ContainsKey(line.Substring(0,colon))) { Reply(stream,400,"Bad headers"); return; }
                 h.Add(line.Substring(0,colon),line.Substring(colon+1).Trim());
             }
-            string host; if (!h.TryGetValue("Host",out host) || !hosts.Contains(host)) { Reply(stream,403,"Host rejected"); return; }
+            string host; if (!h.TryGetValue("Host",out host) || !AcceptsHost(host)) { Reply(stream,403,"Host rejected"); return; }
             string origin;
             if (h.TryGetValue("Origin",out origin) && origin != "http://" + host) { Reply(stream,403,"Origin rejected"); return; }
             if (h.ContainsKey("Transfer-Encoding")) { Reply(stream,400,"Unsupported encoding"); return; }
@@ -188,11 +186,7 @@ public sealed partial class BridgeForm : Form {
         Icon=System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         Text="Мост буфера · Текст и файлы"; ClientSize=new Size(700,800); MinimumSize=new Size(580,420);
         Font=new Font("Segoe UI",11); BackColor=Color.FromArgb(245,248,251); StartPosition=FormStartPosition.CenterScreen;
-        var ips = new List<string>();
-        foreach(var nic in NetworkInterface.GetAllNetworkInterfaces()) {
-            if(nic.OperationalStatus != OperationalStatus.Up || nic.NetworkInterfaceType == NetworkInterfaceType.Loopback || nic.NetworkInterfaceType == NetworkInterfaceType.Tunnel) continue;
-            foreach(var a in nic.GetIPProperties().UnicastAddresses) if(a.Address.AddressFamily==AddressFamily.InterNetwork && !IPAddress.IsLoopback(a.Address)) ips.Add(a.Address.ToString());
-        }
+        var ips=NetworkAddresses.Current();networkAddresses.AddRange(ips);
         try { server=new Server(state,testRoot==null?8765:0,ips,testRoot==null?null:Path.Combine(testRoot,"received"),testRoot==null?Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"WiFiClipboard"):Path.Combine(testRoot,"trust")); }
         catch(SocketException) { throw new InvalidOperationException("Порт 8765 занят. Закройте другой экземпляр программы и запустите снова."); }
         localName=testRoot==null?new LocalNameResponder(server.LocalHostName):null;
@@ -200,9 +194,9 @@ public sealed partial class BridgeForm : Form {
         Controls.Add(layout);
         layout.Controls.Add(new Label {Text="Мост буфера",Font=new Font("Segoe UI",24,FontStyle.Bold),AutoSize=true});
         layout.Controls.Add(new Label {Text="1. Подключите iPhone и компьютер к одному Wi-Fi.\n2. Откройте в Safari один из адресов:",AutoSize=true,Margin=new Padding(0,14,0,8)});
-        var addresses = new TextBox {Multiline=true,ReadOnly=true,Height=78,Width=610,ScrollBars=ScrollBars.Vertical,Text=ips.Count==0?"Нет адреса сети. Подключите Wi-Fi и перезапустите программу.":"http://"+server.LocalHostName+":"+server.Port+"/"+Environment.NewLine+string.Join(Environment.NewLine,ips.ConvertAll(ip=>"http://"+ip+":"+server.Port).ToArray())};
+        var addresses = addressBox = new TextBox {Name="connectionAddresses",Multiline=true,ReadOnly=true,Height=78,Width=610,ScrollBars=ScrollBars.Vertical,Text=ips.Count==0?"Нет адреса сети. Подключите Wi-Fi; адреса обновятся автоматически.":"http://"+server.LocalHostName+":"+server.Port+"/"+Environment.NewLine+string.Join(Environment.NewLine,ips.ConvertAll(ip=>"http://"+ip+":"+server.Port).ToArray())};
         layout.Controls.Add(addresses);
-        layout.Controls.Add(new Label {Text=(localName!=null&&localName.Active?"Первый адрес постоянный (mDNS).":"mDNS недоступен: используйте IP или разрешите UDP 5353.")+"\nВ Safari: Поделиться → На экран «Домой».\nВыключите «Открывать как веб-приложение».",AutoSize=true,MaximumSize=new Size(610,0)});
+        networkHint=new Label {Name="networkHint",Text="Первый адрес постоянный (.local)."+Environment.NewLine+"При смене сети адреса и QR обновятся автоматически."+Environment.NewLine+"В Safari: Поделиться → На экран «Домой». Выключите «Открывать как веб-приложение».",AutoSize=true,MaximumSize=new Size(610,0)};layout.Controls.Add(networkHint);
         layout.Controls.Add(new Label {Text="3. Код подключения:  " + server.Code,Font=new Font("Segoe UI",19,FontStyle.Bold),AutoSize=true,Margin=new Padding(0,16,0,12)});
         layout.Controls.Add(new Label {Text="Windows → iPhone: скопируйте текст, затем нажмите\n«Скопировать на iPhone» в Safari.\niPhone → Windows: вставьте текст на странице и отправьте.",AutoSize=true});
         layout.Controls.Add(new Label {Text="Файлы любых типов · до 10 ГиБ на файл",Font=new Font("Segoe UI",14,FontStyle.Bold),AutoSize=true,Margin=new Padding(0,20,0,8)});
@@ -232,10 +226,10 @@ public sealed partial class BridgeForm : Form {
         forgetDevices.Click+=delegate {try {server.ForgetDevices();forgetDevices.Text="Все подключения забыты";}catch(Exception e){MessageBox.Show(this,e.Message,"Подключения");}};
         var footer=new Panel {Name="fixedFooter",Dock=DockStyle.Bottom,Height=70,Padding=new Padding(26,8,26,14),BackColor=BackColor};
         footer.Controls.Add(forgetDevices);Controls.Add(footer);
-        AddFeatures(layout,ips);
+        AddFeatures(layout);
         KeepScrollBottomReachable(layout);
         state.WriteClipboard=Write;
-        sequence=GetClipboardSequenceNumber(); timer.Interval=500; timer.Tick+=Observe; if(testRoot==null)timer.Start();
+        sequence=GetClipboardSequenceNumber(); timer.Interval=500; timer.Tick+=Observe; if(testRoot==null){timer.Start();WatchNetwork();}
 
     }
     static void KeepScrollBottomReachable(FlowLayoutPanel layout) {
@@ -260,7 +254,7 @@ public sealed partial class BridgeForm : Form {
         int width=Math.Min(Width,area.Width),height=Math.Min(Height,area.Height);
         Bounds=new Rectangle(Math.Max(area.Left,Math.Min(Left,area.Right-width)),Math.Max(area.Top,Math.Min(Top,area.Bottom-height)),width,height);
     }
-    protected override void Dispose(bool disposing) {if(disposing){timer.Stop();timer.Dispose();if(localName!=null)localName.Dispose();if(server!=null)server.Dispose();}base.Dispose(disposing);}
+    protected override void Dispose(bool disposing) {if(disposing){StopWatchingNetwork();timer.Stop();timer.Dispose();if(localName!=null)localName.Dispose();if(server!=null)server.Dispose();}base.Dispose(disposing);}
     bool Write(string text) {
         try {
             return (bool)Invoke(new Func<bool>(delegate {

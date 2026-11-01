@@ -69,6 +69,7 @@ static class SelfTest {
             }
             FileTests.Run();
             ExperienceTests.Run();
+            NetworkTests.Run();
             SafariTests.Run();
             FeatureTests.Run(Path.GetDirectoryName(Path.GetFullPath(output)));
             results.Add("All "+checks+" checks passed. Native clipboard replaced by an in-memory adapter; no user clipboard changes.");
