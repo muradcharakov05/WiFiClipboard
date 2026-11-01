@@ -14,8 +14,8 @@ using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
 [assembly: AssemblyTitle("Мост буфера — текст и файлы")]
-[assembly: AssemblyVersion("7.3.0.0")]
-[assembly: AssemblyFileVersion("7.3.0.0")]
+[assembly: AssemblyVersion("7.3.1.0")]
+[assembly: AssemblyFileVersion("7.3.1.0")]
 namespace WifiClipboard {
 public sealed class State {
     public readonly object Gate = new object();

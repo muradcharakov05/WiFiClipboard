@@ -8,6 +8,11 @@ namespace WifiClipboard {
 internal sealed class RoundedFlowPanel : FlowLayoutPanel {
  public Color Surface=Color.White,Border=Color.FromArgb(223,232,236);
  public RoundedFlowPanel(){DoubleBuffered=true;ResizeRedraw=true;}
+ protected override void OnSizeChanged(EventArgs e){
+  base.OnSizeChanged(e);if(Width<2||Height<2)return;
+  var previous=Region;using(var shape=DesktopTheme.RoundPath(new Rectangle(0,0,Width,Height),14))Region=new Region(shape);
+  if(previous!=null)previous.Dispose();
+ }
  protected override void OnPaintBackground(PaintEventArgs e){
   e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;
   using(var back=new SolidBrush(Parent==null?Color.FromArgb(242,246,248):Parent.BackColor))e.Graphics.FillRectangle(back,ClientRectangle);
